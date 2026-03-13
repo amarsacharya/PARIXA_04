@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* Base styles and custom utilities can go here if needed */
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  background-color: #f3f4f6; /* min-w-screen min-h-screen bg-gray-100 */
+}
