@@ -109,7 +109,7 @@ const StudentDashboard = () => {
                         <CheckCircle size={40} className="mx-auto mb-3 text-indigo-200" />
                         <h3 className="font-bold text-lg mb-1">System Check Passed</h3>
                         <p className="text-indigo-100 text-sm opacity-90">Your browser and network are optimized for secure examination.</p>
-                        <button className="mt-4 px-4 py-2 color:blue bg-white bg-opacity-20 hover:bg-opacity-30 rounded-full text-sm font-medium transition-colors">
+                        <button className="mt-4 px-4 py-2 bg-white text-indigo-600 hover:bg-indigo-50 rounded-full text-sm font-medium transition-colors shadow-sm">
                             Run Test Again
                         </button>
                     </div>
