@@ -12,13 +12,13 @@ export const userService = {
         return response.data;
     },
 
-    deleteUser: async (userId) => {
-        const response = await api.delete(`/users/${userId}`);
+    updateUser: async (userId, userData) => {
+        const response = await api.put(`/admin/users/${userId}`, userData);
         return response.data;
     },
 
-    updateUserRole: async (userId, role) => {
-        const response = await api.put(`/users/${userId}/role`, { role });
+    deleteUser: async (userId) => {
+        const response = await api.delete(`/admin/users/${userId}`);
         return response.data;
     }
 };

@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema({
         enum: ['admin', 'teacher', 'student'],
         required: true,
     },
+    assignedClass: {
+        type: String,
+        default: 'Unassigned',
+    },
     // Allows us to track if they've changed their default password
     hasChangedPassword: {
         type: Boolean,

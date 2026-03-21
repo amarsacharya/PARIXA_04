@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Upload } from 'lucide-react';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Modal from '../../components/common/Modal';
 import { userService } from '../../services/userService';
+import api from '../../services/api';
 
 const UserManagement = () => {
     const [searchTerm, setSearchTerm] = useState('');
+    const [roleFilter, setRoleFilter] = useState('all');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
+    const [selectedRoleForModal, setSelectedRoleForModal] = useState('student');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isBulkImporting, setIsBulkImporting] = useState(false);
 
     const [users, setUsers] = useState([]);
     const [isLoadingUsers, setIsLoadingUsers] = useState(true);
@@ -36,19 +40,65 @@ const UserManagement = () => {
         fetchUsers();
     }, []);
 
-    const filteredUsers = users.filter(user =>
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.role.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const handleCSVUpload = async (e, role) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const text = event.target.result;
+            const rows = text.split(/\r?\n/).filter(row => row.trim() !== '');
+            
+            // Assume format: Name,Email,Class (skip header if it contains "email")
+            const startIndex = rows[0].toLowerCase().includes('email') ? 1 : 0;
+            const userData = rows.slice(startIndex).map(row => {
+                const parts = row.split(',');
+                return {
+                    name: parts[0]?.trim(),
+                    email: parts[1]?.trim(),
+                    assignedClass: role === 'student' ? (parts[2]?.trim() || 'Unassigned') : role === 'teacher' ? 'Teacher' : 'Admin',
+                    role: role
+                };
+            }).filter(u => u.name && u.email);
+
+            if (userData.length === 0) {
+                alert(`No valid users found in CSV. Format should be: Name, Email${role === 'student' ? ', Class (optional)' : ''}`);
+                return;
+            }
+
+            if (!window.confirm(`Register ${userData.length} ${role}s from CSV? Emails will be sent.`)) return;
+
+            try {
+                setIsBulkImporting(true);
+                const res = await api.post('/admin/register-bulk', { users: userData });
+                alert(`Bulk Import Complete: ${res.data.details.filter(d => d.status === 'success').length} succeeded.`);
+                window.location.reload(); // Refresh to see new users
+            } catch (err) {
+                alert("Bulk Import Failed: " + (err.response?.data?.message || err.message));
+            } finally {
+                setIsBulkImporting(false);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const filteredUsers = users.filter(user => {
+        const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              user.role.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+        return matchesSearch && matchesRole;
+    });
 
     const handleEdit = (user) => {
         setSelectedUser(user);
+        setSelectedRoleForModal(user.role || 'student');
         setIsModalOpen(true);
     };
 
     const handleAddNew = () => {
         setSelectedUser(null);
+        setSelectedRoleForModal('student');
         setIsModalOpen(true);
     };
 
@@ -56,10 +106,16 @@ const UserManagement = () => {
         e.preventDefault();
         
         const formData = new FormData(e.target);
+        
+        let calculatedClass = formData.get('userClass') || 'Unassigned';
+        if (formData.get('userRole') === 'teacher') calculatedClass = 'Teacher';
+        if (formData.get('userRole') === 'admin') calculatedClass = 'Admin';
+
         const userData = {
             name: formData.get('userName'),
             email: formData.get('userEmail'),
-            role: formData.get('userRole')
+            role: formData.get('userRole'),
+            assignedClass: calculatedClass
         };
 
         try {
@@ -75,13 +131,16 @@ const UserManagement = () => {
                     name: userData.name,
                     email: userData.email,
                     role: userData.role,
+                    assignedClass: userData.assignedClass,
                     status: 'active'
                 };
                 setUsers([...users, newUser]);
                 alert(`${userData.role} successfully registered! Passwords sent via email.`);
             } else {
-                // Placeholder for editing logic
-                alert('Editing user details backend connection not yet implemented.');
+                await userService.updateUser(selectedUser.id, userData);
+                setUsers(users.map(u => 
+                    u.id === selectedUser.id ? { ...u, ...userData } : u
+                ));
             }
             setIsModalOpen(false);
         } catch (error) {
@@ -92,9 +151,15 @@ const UserManagement = () => {
         }
     };
 
-    const handleDelete = (id) => {
-        if (window.confirm('Are you sure you want to delete this user?')) {
-            setUsers(users.filter(u => u.id !== id));
+    const handleDelete = async (id) => {
+        if (window.confirm('Are you sure you want to delete this user? Action cannot be undone.')) {
+            try {
+                await userService.deleteUser(id);
+                setUsers(users.filter(u => u.id !== id));
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                alert(error.response?.data?.message || 'Failed to delete user.');
+            }
         }
     };
 
@@ -102,9 +167,43 @@ const UserManagement = () => {
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-                <Button onClick={handleAddNew} className="flex items-center">
-                    <Plus size={16} className="mr-2" /> Add New User
-                </Button>
+                <div className="flex gap-3">
+                    <input 
+                        type="file" 
+                        id="csvInputStudent" 
+                        accept=".csv" 
+                        className="hidden" 
+                        onChange={(e) => handleCSVUpload(e, 'student')}
+                    />
+                    <input 
+                        type="file" 
+                        id="csvInputTeacher" 
+                        accept=".csv" 
+                        className="hidden" 
+                        onChange={(e) => handleCSVUpload(e, 'teacher')}
+                    />
+                    <div className="flex bg-indigo-50 rounded-md border border-indigo-200 overflow-hidden">
+                        <Button 
+                            variant="secondary" 
+                            onClick={() => document.getElementById('csvInputStudent').click()}
+                            isLoading={isBulkImporting}
+                            className="flex items-center text-indigo-700 bg-transparent hover:bg-indigo-100 border-none rounded-none border-r border-indigo-200"
+                        >
+                            <Upload size={16} className="mr-2" /> Students (CSV)
+                        </Button>
+                        <Button 
+                            variant="secondary" 
+                            onClick={() => document.getElementById('csvInputTeacher').click()}
+                            isLoading={isBulkImporting}
+                            className="flex items-center text-indigo-700 bg-transparent hover:bg-indigo-100 border-none rounded-none"
+                        >
+                            <Upload size={16} className="mr-2" /> Teachers (CSV)
+                        </Button>
+                    </div>
+                    <Button onClick={handleAddNew} className="flex items-center bg-indigo-600">
+                        <Plus size={16} className="mr-2" /> Add New User
+                    </Button>
+                </div>
             </div>
 
             <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
@@ -123,7 +222,11 @@ const UserManagement = () => {
                         />
                     </div>
                     <div className="flex gap-2 w-full sm:w-auto">
-                        <select className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <select 
+                            value={roleFilter}
+                            onChange={(e) => setRoleFilter(e.target.value)}
+                            className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        >
                             <option value="all">All Roles</option>
                             <option value="student">Students</option>
                             <option value="teacher">Teachers</option>
@@ -139,6 +242,7 @@ const UserManagement = () => {
                             <tr>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class/Div</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
@@ -169,6 +273,11 @@ const UserManagement = () => {
                                                     'bg-green-100 text-green-800'
                                             }`}>
                                             {user.role}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <span className="text-sm font-bold text-gray-900 bg-gray-100 px-3 py-1 rounded-md">
+                                            {user.assignedClass || 'Unassigned'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -218,17 +327,27 @@ const UserManagement = () => {
                         required
                     />
 
-                    <div className="flex flex-col">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                        <select
-                            name="userRole"
-                            className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm border p-2"
-                            defaultValue={selectedUser?.role || 'student'}
-                        >
-                            <option value="student">Student</option>
-                            <option value="teacher">Teacher</option>
-                            <option value="admin">Admin</option>
-                        </select>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                            <select
+                                name="userRole"
+                                className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm border p-2 bg-white"
+                                value={selectedRoleForModal}
+                                onChange={(e) => setSelectedRoleForModal(e.target.value)}
+                            >
+                                <option value="student">Student</option>
+                                <option value="teacher">Teacher</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <Input
+                            label="Class/Section (e.g. CSE VIA)"
+                            name="userClass"
+                            defaultValue={selectedUser?.assignedClass || ''}
+                            placeholder="Optional"
+                            disabled={selectedRoleForModal !== 'student'}
+                        />
                     </div>
 
                     <div className="flex justify-end space-x-3 mt-6">

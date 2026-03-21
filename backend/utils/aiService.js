@@ -1,8 +1,27 @@
 const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
-const pdfParse = require('pdf-parse');
+
 
 // The AI generator setup
 const apiKey = process.env.GEMINI_API_KEY;
+const apiSchema = {
+    type: SchemaType.ARRAY,
+    description: "A list of multiple choice questions generated from the text.",
+    items: {
+        type: SchemaType.OBJECT,
+        properties: {
+            text: { type: SchemaType.STRING, description: "The question text" },
+            options: { 
+                type: SchemaType.ARRAY, 
+                items: { type: SchemaType.STRING },
+                description: "Exactly 4 options"
+            },
+            correctAnswer: { type: SchemaType.INTEGER, description: "Index of correct option (0, 1, 2, or 3)" },
+            difficulty: { type: SchemaType.STRING, description: "easy, medium, or hard" },
+        },
+        required: ["text", "options", "correctAnswer", "difficulty"],
+    },
+};
+
 // The initialization depends on the API key, so we check just in case.
 const getModel = () => {
     if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured in .env");
@@ -13,37 +32,31 @@ const getModel = () => {
         model: 'gemini-2.5-flash',
         generationConfig: {
             responseMimeType: 'application/json',
-            responseSchema: {
-                type: SchemaType.ARRAY,
-                description: "A list of multiple choice questions generated from the text.",
-                items: {
-                    type: SchemaType.OBJECT,
-                    properties: {
-                        text: { type: SchemaType.STRING, description: "The question text" },
-                        options: { 
-                            type: SchemaType.ARRAY, 
-                            items: { type: SchemaType.STRING },
-                            description: "Exactly 4 options"
-                        },
-                        correctAnswer: { type: SchemaType.INTEGER, description: "Index of correct option (0, 1, 2, or 3)" },
-                        difficulty: { type: SchemaType.STRING, description: "easy, medium, or hard" },
-                    },
-                    required: ["text", "options", "correctAnswer", "difficulty"],
-                },
-            },
+            responseSchema: apiSchema,
         }
     });
 };
 
 const aiService = {
-    // 1. Convert PDF to raw text
     extractTextFromPDF: async (pdfBuffer) => {
         try {
+            if (!pdfBuffer || pdfBuffer.length === 0) {
+                throw new Error('PDF Buffer is empty or invalid.');
+            }
+
+            // Standard pdf-parse v1.1.1 usage
+            const pdfParse = require('pdf-parse');
             const data = await pdfParse(pdfBuffer);
-            return data.text;
+            const text = data.text;
+
+            if (!text || text.trim().length === 0) {
+                console.warn('PDF parsed but no text was extracted. Likely a scanned document (image-based).');
+                throw new Error('This PDF appears to be an image or scanned document. ParixaAI requires text-based PDFs for extraction at this stage.');
+            }
+            return text;
         } catch (err) {
-            console.error('PDF parsing error:', err);
-            throw new Error('Failed to read PDF document');
+            console.error('PDF parsing critical failure:', err.message);
+            throw new Error(err.message || 'Failed to read PDF document');
         }
     },
 

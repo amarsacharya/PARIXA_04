@@ -34,9 +34,31 @@ const examSchema = new mongoose.Schema({
     // We can assign this exam to a specific group or array of students later.
     // For now, if it's "published", assigned students can see it.
     assignedStudents: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    }]
+        user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
+        setNumber: {
+            type: Number,
+            default: 1
+        }
+    }],
+    reminderSent: {
+        type: Boolean,
+        default: false
+    },
+    showResults: {
+        type: Boolean,
+        default: false
+    },
+    examPassword: {
+        type: String,
+        default: ''
+    },
+    entryWindowMinutes: {
+        type: Number,
+        default: 60
+    }
 }, {
     timestamps: true
 });

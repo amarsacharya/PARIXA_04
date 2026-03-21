@@ -10,7 +10,7 @@ const { protect, adminOnly } = require('../middleware/authMiddleware');
 // Note : Protected so only authenticated Admins can access it
 router.post('/register', protect, adminOnly, async (req, res) => {
     try {
-        const { name, email, role } = req.body;
+        const { name, email, role, assignedClass } = req.body;
 
         // Validation limits to student or teacher
         if (!['student', 'teacher'].includes(role)) {
@@ -45,6 +45,7 @@ router.post('/register', protect, adminOnly, async (req, res) => {
             email,
             password: rawPassword,
             role,
+            assignedClass: assignedClass || 'Unassigned',
         });
 
         res.status(201).json({
@@ -54,6 +55,56 @@ router.post('/register', protect, adminOnly, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error creating user' });
+    }
+});
+
+// Route: POST /api/admin/register-bulk
+// Desc : Admin bulk-registers students/teachers from a list
+router.post('/register-bulk', protect, adminOnly, async (req, res) => {
+    try {
+        const { users } = req.body; // Array of { name, email, role }
+        if (!users || !Array.isArray(users)) {
+            return res.status(400).json({ message: 'Invalid payload. "users" must be an array.' });
+        }
+
+        console.log(`[Admin] Processing bulk registration for ${users.length} users...`);
+        const results = [];
+        for (const u of users) {
+           try {
+                const userExists = await User.findOne({ email: u.email });
+                if (userExists) {
+                    results.push({ email: u.email, status: 'error', message: 'User already exists' });
+                    continue;
+                }
+
+                const role = u.role || 'student';
+                const rawPassword = role === 'student' ? 'student123' : Math.random().toString(36).slice(-8);
+
+                await User.create({
+                    name: u.name,
+                    email: u.email,
+                    password: rawPassword,
+                    role,
+                    assignedClass: u.assignedClass || 'Unassigned'
+                });
+
+                // Optional: Send email (keeping it async for speed but careful with rate limits)
+                sendEmail({ 
+                    to: u.email, 
+                    subject: `Welcome to ParixaAI - Your Portals Entry Credentials`, 
+                    text: `Hello ${u.name},\n\nYou have been registered as a ${role}.\nPortal: http://localhost:5173\nEmail: ${u.email}\nInitial Password: ${rawPassword}` 
+                }).catch(e => console.error(`Email fail for ${u.email}`, e));
+
+                results.push({ email: u.email, status: 'success' });
+           } catch (err) {
+                results.push({ email: u.email, status: 'error', message: err.message });
+           }
+        }
+
+        res.json({ message: 'Bulk registration complete', details: results });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error during bulk registration' });
     }
 });
 
@@ -67,6 +118,48 @@ router.get('/users', protect, adminOnly, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error fetching users' });
+    }
+});
+
+// Route: PUT /api/admin/users/:id
+// Desc : Admin updates a user's details
+router.put('/users/:id', protect, adminOnly, async (req, res) => {
+    try {
+        const { name, email, role, assignedClass } = req.body;
+        const user = await User.findById(req.params.id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        user.name = name || user.name;
+        user.email = email || user.email;
+        user.role = role || user.role;
+        user.assignedClass = assignedClass || user.assignedClass;
+
+        const updatedUser = await user.save();
+        res.json(updatedUser);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error updating user' });
+    }
+});
+
+// Route: DELETE /api/admin/users/:id
+// Desc : Admin deletes a user entirely
+router.delete('/users/:id', protect, adminOnly, async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        
+        // Use deleteOne() instead of remove() for Mongoose 6+
+        await User.deleteOne({ _id: req.params.id });
+        res.json({ message: 'User removed completely' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error deleting user' });
     }
 });
 

@@ -24,18 +24,21 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     const adminLinks = [
         { name: 'Dashboard', path: '/admin/dashboard', icon: 'dashboard' },
         { name: 'User Management', path: '/admin/users', icon: 'users' },
+        { name: 'Security Profile', path: '/admin/profile', icon: 'settings' }
     ];
 
     const teacherLinks = [
         { name: 'Dashboard', path: '/teacher/dashboard', icon: 'dashboard' },
         { name: 'Create Exam', path: '/teacher/exam/create', icon: 'exams' },
         { name: 'Schedule Exam', path: '/teacher/exam/schedule', icon: 'calendar' },
-        { name: 'Results', path: '/teacher/results', icon: 'analytics' }
+        { name: 'Results', path: '/teacher/results', icon: 'analytics' },
+        { name: 'Security Profile', path: '/teacher/profile', icon: 'settings' }
     ];
 
     const studentLinks = [
         { name: 'Dashboard', path: '/student/dashboard', icon: 'dashboard' },
         { name: 'My Results', path: '/student/results', icon: 'analytics' },
+        { name: 'Security Profile', path: '/student/profile', icon: 'settings' }
     ];
 
     let links = [];

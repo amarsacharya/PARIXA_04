@@ -24,8 +24,10 @@ import Analytics from '../pages/teacher/Analytics';
 
 // Student
 import StudentDashboard from '../pages/student/StudentDashboard';
-import ExamPage from '../pages/student/ExamPage';
+import ExamPage from '../pages/student/TakeExam';
 import StudentResults from '../pages/student/StudentResults';
+
+import Profile from '../pages/common/Profile';
 
 const AppRoutes = () => {
     return (
@@ -39,6 +41,7 @@ const AppRoutes = () => {
                 <Route path="/admin" element={<DashboardLayout />}>
                     <Route path="dashboard" element={<AdminDashboard />} />
                     <Route path="users" element={<UserManagement />} />
+                    <Route path="profile" element={<Profile />} />
                 </Route>
             </Route>
 
@@ -52,6 +55,7 @@ const AppRoutes = () => {
                     <Route path="exam/schedule" element={<ScheduleExam />} />
                     <Route path="results" element={<Results />} />
                     <Route path="analytics" element={<Analytics />} />
+                    <Route path="profile" element={<Profile />} />
                 </Route>
             </Route>
 
@@ -61,6 +65,7 @@ const AppRoutes = () => {
                 <Route path="/student" element={<DashboardLayout />}>
                     <Route path="dashboard" element={<StudentDashboard />} />
                     <Route path="results" element={<StudentResults />} />
+                    <Route path="profile" element={<Profile />} />
                 </Route>
 
                 {/* Exam page needs full screen, no dashboard layout */}

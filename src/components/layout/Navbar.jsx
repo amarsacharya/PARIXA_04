@@ -29,7 +29,7 @@ const Navbar = ({ toggleSidebar }) => {
                         </div>
                         <div className="flex-shrink-0 flex items-center ml-4 md:ml-0">
                             <div className="text-xl font-bold text-indigo-600 tracking-tight">
-                                ExamPlatform
+                                Parixa
                             </div>
                         </div>
                     </div>
